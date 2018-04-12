@@ -85,15 +85,29 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
     async def _console_write(self, value):
         self.append_console_output(1, value)
 
+
+    async def _modem_read(self, *args, **kwargs):
+        self.set_modem_blocking()
+        self.io_counter += 1
+        self._future_modem_input = asyncio.Future()
+        await self._future_modem_input
+        self.set_modem_blocking(False)
+        return self._future_modem_input.result()
+
+    async def _modem_write(self, value):
+        self.append_modem_output(1, value)
+
+
     def reset_tbas(self):
         self.tbas = Interpreter(
             console_read = self._console_read,
             console_write = self._console_write,
-            modem_read = None,
-            modem_write = None,
+            modem_read = self._modem_read,
+            modem_write = self._modem_write,
             )
         self.io_counter = 0
         self._future_console_input = None
+        self._future_modem_input = None
         self._tbas_future = None
         self.tbas_evaluate_program()
 
@@ -149,13 +163,21 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self.memory_buffer.setText(frame.format_mcell(chr))
         self.io_buffer.setText(frame.format_icell(chr))
 
+        # hilight the selected instruction
+        cursor = self.program_input.textCursor()
+        cursor.setPosition(frame.eptr)
+        cursor.setPosition(frame.eptr + 1, QtGui.QTextCursor.KeepAnchor)
+        self.program_input.setTextCursor(cursor)
+
 
     def set_console_blocking(self, truth=True):
         arg = "start" if truth else "stop"
+        self.input_tabs.setCurrentIndex(0)
         QMetaObject.invokeMethod(self.console_blocked.rootObject(), arg)
 
     def set_modem_blocking(self, truth=True):
         arg = "start" if truth else "stop"
+        self.input_tabs.setCurrentIndex(1)
         QMetaObject.invokeMethod(self.modem_blocked.rootObject(), arg)
 
 
@@ -180,6 +202,29 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
                 self.append_console_output(0, input_)
                 self._future_console_input.set_result(input_)
                 self.console_input.setText("")
+
+
+    def append_modem_output(self, isoutput, value):
+        prefix = "Out" if isoutput else "In "
+        self.modem_output.append("{}[{}.{}]: {}".format(prefix,
+            self.tbas.run_counter, self.io_counter, value))
+
+    def cast_modem_input(self):
+        input_ = self.modem_input.text()
+        if len(input_):
+            return input_
+        return None
+
+    def preview_modem_input(self):
+        self.modem_input_value.setText(self.cast_modem_input())
+
+    def process_modem_input(self):
+        if self._future_modem_input:
+            input_ = self.cast_modem_input()
+            if type(input_) is str:
+                self.append_modem_output(0, input_)
+                self._future_modem_input.set_result(input_)
+                self.modem_input.setText("")
 
 
     # signal Handlers
@@ -279,17 +324,12 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self.program_input_is_dirty = True
         self.program_input.setStyleSheet('border: 1px solid red')
 
-
-    def program_input_cursorPositionChanged(self):
-        print('cursor')
-
-    def program_input_selectionChanged(self):
-        print('selection')
+    # def program_input_cursorPositionChanged(self):
+    #     cursor = self.program_input.textCursor()
+    #     print("c@{}".format(cursor.position()))
 
     def program_input_textChanged(self):
         self.program_input_set_dirty()
-        print('changed')
-
 
 
 def main():
