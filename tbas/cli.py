@@ -54,6 +54,7 @@ def main():
     context = loop.run_until_complete(run_tbas(args.program, **kwargs))
     print("\n")
     print(context.stack)
+    print(context.stack[0].format_mcell(chr))
 
 
 if __name__ == '__main__':

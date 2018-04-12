@@ -9,13 +9,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
+    <width>1100</width>
     <height>600</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
-    <width>1000</width>
+    <width>1100</width>
     <height>600</height>
    </size>
   </property>
@@ -195,18 +195,6 @@
                </widget>
               </item>
               <item>
-               <widget class="QToolButton" name="frame_up_button">
-                <property name="font">
-                 <font>
-                  <family>Courier New</family>
-                 </font>
-                </property>
-                <property name="text">
-                 <string>+</string>
-                </property>
-               </widget>
-              </item>
-              <item>
                <widget class="QToolButton" name="frame_down_button">
                 <property name="font">
                  <font>
@@ -218,14 +206,22 @@
                 </property>
                </widget>
               </item>
+              <item>
+               <widget class="QToolButton" name="frame_up_button">
+                <property name="font">
+                 <font>
+                  <family>Courier New</family>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>+</string>
+                </property>
+               </widget>
+              </item>
              </layout>
             </widget>
            </item>
           </layout>
-          <zorder>program_input</zorder>
-          <zorder>splitter_5</zorder>
-          <zorder>splitter_5</zorder>
-          <zorder>button_widget</zorder>
          </widget>
         </item>
         <item>
@@ -621,30 +617,6 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QComboBox" name="console_select">
-                     <property name="font">
-                      <font>
-                       <family>Arial</family>
-                      </font>
-                     </property>
-                     <item>
-                      <property name="text">
-                       <string>Single Int</string>
-                      </property>
-                     </item>
-                     <item>
-                      <property name="text">
-                       <string>Single Chr</string>
-                      </property>
-                     </item>
-                     <item>
-                      <property name="text">
-                       <string>Line</string>
-                      </property>
-                     </item>
-                    </widget>
-                   </item>
-                   <item>
                     <widget class="QPushButton" name="console_enter_button">
                      <property name="font">
                       <font>
@@ -768,30 +740,6 @@
                     </spacer>
                    </item>
                    <item>
-                    <widget class="QComboBox" name="modem_select">
-                     <property name="font">
-                      <font>
-                       <family>Arial</family>
-                      </font>
-                     </property>
-                     <item>
-                      <property name="text">
-                       <string>Single Int</string>
-                      </property>
-                     </item>
-                     <item>
-                      <property name="text">
-                       <string>Single Chr</string>
-                      </property>
-                     </item>
-                     <item>
-                      <property name="text">
-                       <string>Line</string>
-                      </property>
-                     </item>
-                    </widget>
-                   </item>
-                   <item>
                     <widget class="QPushButton" name="modem_enter_button">
                      <property name="font">
                       <font>
@@ -837,6 +785,12 @@
            </layout>
           </widget>
           <widget class="QWidget" name="outputs_widget" native="true">
+           <property name="minimumSize">
+            <size>
+             <width>578</width>
+             <height>0</height>
+            </size>
+           </property>
            <layout class="QVBoxLayout" name="verticalLayout_2">
             <property name="leftMargin">
              <number>0</number>
@@ -883,6 +837,9 @@
                    <font>
                     <family>Courier New</family>
                    </font>
+                  </property>
+                  <property name="lineWrapMode">
+                   <enum>QTextEdit::NoWrap</enum>
                   </property>
                  </widget>
                 </item>
@@ -1114,10 +1071,12 @@
                     <family>Courier New</family>
                    </font>
                   </property>
+                  <property name="lineWrapMode">
+                   <enum>QTextEdit::NoWrap</enum>
+                  </property>
                  </widget>
                 </item>
                </layout>
-               <zorder>memory_buffer</zorder>
                <zorder>io_buffer</zorder>
                <zorder>io_buttons</zorder>
               </widget>
@@ -1211,6 +1170,9 @@
                     <family>Courier New</family>
                    </font>
                   </property>
+                  <property name="lineWrapMode">
+                   <enum>QTextEdit::NoWrap</enum>
+                  </property>
                  </widget>
                 </item>
                </layout>
@@ -1232,7 +1194,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1000</width>
+     <width>1100</width>
      <height>22</height>
     </rect>
    </property>

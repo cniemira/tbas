@@ -8,7 +8,8 @@ README = """Tis But A Scratch
 """
 
 requires = [
-    #'pyqt5',
+    'pyqt=5',
+    'quamash'
     ]
 
 setup(name='tbas',

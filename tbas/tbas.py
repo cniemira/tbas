@@ -2,10 +2,13 @@ import asyncio
 import io
 import logging
 
+from copy import copy
+from itertools import zip_longest
+
 
 _log = logging.getLogger(__name__)
 
-WORKING_MEMORY_BYTES = 16
+WORKING_MEMORY_BYTES = 256
 
 
 class Context(object):
@@ -119,6 +122,9 @@ class Context(object):
             self.eptr, command))
         future = asyncio.ensure_future(getattr(self, command)())
         frame = await future
+        _log.debug('Created {}'.format(frame))
+        if not isinstance(frame, Frame):
+            frame = Frame(self)
         self.stack.append(frame)
         return frame
 
@@ -187,8 +193,9 @@ class Context(object):
             return Frame(self, noop=True, msg="in dead loop")
         command = self.imodes[self.imode]
         _log.debug('Context._run_operation "{}"'.format(command))
-        await asyncio.ensure_future(getattr(self, command)())
-        # return getattr(self, command)()
+        future = asyncio.ensure_future(getattr(self, command)())
+        await future
+        return future.result()
 
     async def _console_decimal_write(self):
         mvalue = self.mcell[self.mptr]
@@ -203,6 +210,8 @@ class Context(object):
             task = await future
             ivalue = task.result()
             _log.debug('READ "{}"'.format(ivalue))
+            if not ivalue.isdigit():
+                ivalue = ord(ivalue)
             self.mcell[self.mptr] = int(ivalue) % 256
 
     async def _console_ascii_write(self):
@@ -233,10 +242,13 @@ class Context(object):
             task = await future
             ivalue = task.result()
             _log.debug('READ "{}"'.format(ivalue))
+            if not ivalue.isdigit():
+                ivalue = ord(ivalue)
             self.mcell[self.mptr] = ord(ivalue) % 256
 
     async def _buffer_program(self):
         self.icell = bytearray(self.source.encode())
+        return Frame(self)
 
     async def _execute_task(self):
         mvalue = self.mcell[self.mptr]
@@ -244,7 +256,8 @@ class Context(object):
             raise UserWarning('Unknown task')
         command = self.tasks[mvalue]
         _log.debug('Context._execute_task "{}"'.format(command))
-        return getattr(self, command)()
+        getattr(self, command)()
+        return Frame(self)
 
     def _buffer_enqueue(self):
         mvalue = self.mcell[self.mptr]
@@ -412,6 +425,9 @@ class Context(object):
         print('TBASED {}'.format(buf))
 
 
+def chunk(n, i, v=None):
+    a = [iter(i)] * n
+    return zip_longest(*[iter(i)]*n, fillvalue=v)
 
 
 class Frame(object):
@@ -423,7 +439,7 @@ class Frame(object):
         self.msg = msg
 
         for key in self._context_keys:
-            setattr(self, key, getattr(context, key))
+            setattr(self, key, copy(getattr(context, key)))
 
     @property
     def icell_len(self):
@@ -436,14 +452,31 @@ class Frame(object):
     @property
     def loop_ptr(self):
         if self.loop_depth:
-            return self.loop[-1]
+            return self.loop_ref[-1]
         return None
 
-    def format_icell(self, type_):
-        return type_(self.icell)
+    def _format_byte(self, byte, type_=chr):
+        if byte is None:
+            return "   "
+        return "{:03d}".format(byte)
 
-    def format_mcell(self, type_):
-        return type_(self.mcell)
+    def _format_memory(self, memory, type_=chr):
+        b = io.StringIO()
+        row_n = 0
+        for row in chunk(16, memory):
+            l, r = chunk(8, row)
+            l_bytes = " ".join([self._format_byte(x, type_) for x in iter(l)])
+            r_bytes = " ".join([self._format_byte(x, type_) for x in iter(r)])
+            b.write("0x{:03d}: ".format(row_n*16))
+            b.write("   ".join([l_bytes, r_bytes]) + "\n")
+            row_n += 1
+        return b.getvalue()
+
+    def format_icell(self, type_=chr):
+        return self._format_memory(self.icell, type_)
+
+    def format_mcell(self, type_=chr):
+        return self._format_memory(self.mcell, type_)
 
 
 class Stack(list):
@@ -458,6 +491,7 @@ class Interpreter(object):
         self.console_write = console_write
         self.modem_read = modem_read
         self.modem_write = modem_write
+        self.run_counter = 0
 
     async def _console_read(self, *args, **kwargs):
         if self.console_read:
@@ -488,10 +522,10 @@ class Interpreter(object):
         return None
 
     async def run(self, program):
-        print('RUN!!!')
         #TODO: ensure this looks like valid TBAS code
         ctx = Context(program, self)
         await ctx.run()
+        self.run_counter += 1
         return ctx
 
 

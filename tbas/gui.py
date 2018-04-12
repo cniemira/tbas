@@ -41,7 +41,7 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self.app.setWindowIcon(QtGui.QIcon(resource_path('icon.png')))
 
         self.setupUi(self)
-        self.setWindowTitle('Tis But A Scratch :: IDE')
+        self.setWindowTitle('tbas-ide')
 
         # Setup the busy indicators
         for w in [self.console_blocked, self.modem_blocked]:
@@ -76,20 +76,23 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
 
     async def _console_read(self, *args, **kwargs):
         self.set_console_blocking()
-        return 'X'
-        # self._future_console_input = asyncio.Future()
-        # await self._future_console_input
-        # self.set_console_blocking(False)
-        # return self._future_console_input.result()
+        self.io_counter += 1
+        self._future_console_input = asyncio.Future()
+        await self._future_console_input
+        self.set_console_blocking(False)
+        return self._future_console_input.result()
 
+    async def _console_write(self, value):
+        self.append_console_output(1, value)
 
     def reset_tbas(self):
         self.tbas = Interpreter(
             console_read = self._console_read,
-            console_write = None,
+            console_write = self._console_write,
             modem_read = None,
             modem_write = None,
             )
+        self.io_counter = 0
         self._future_console_input = None
         self._tbas_future = None
         self.tbas_evaluate_program()
@@ -99,6 +102,7 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self._tbas_future = None
         self.current_context = task.result()
         self.program_input.setEnabled(True)
+        self.io_counter = 0
         self.set_stack_depth()
 
     def tbas_evaluate_program(self):
@@ -107,7 +111,7 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
             return
         self.program_input.setEnabled(False)
         program = self.program_input.toPlainText()
-        self._tbas_future = asyncio.ensure_future(self.tbas.run(program))
+        self._tbas_future = asyncio.ensure_future(self.tbas.run(program.strip()))
         self._tbas_future.add_done_callback(self.tbas_complete_callback)
 
     def _set_status_item(self, n, value):
@@ -117,11 +121,11 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
     def set_stack_depth(self):
         stack_depth = len(self.current_context.stack)
         stack_max = max(stack_depth - 1, 0)
-        self.frame_slider.setSliderPosition(0)
+        self.frame_slider.setValue(0)
         self.frame_slider.setMaximum(stack_max)
         self._set_status_item(1, stack_max)
         # will trigger a call to view_stack_position
-        self.frame_slider.setSliderPosition(stack_max)
+        self.frame_slider.setValue(stack_max)
 
     def view_stack_position(self, stack_pointer):
         stack = self.current_context.stack
@@ -142,8 +146,8 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
             i += 1
             self._set_status_item(i, getattr(frame, item))
 
-        self.memory_buffer.setText(frame.format_mcell(str))
-        self.io_buffer.setText(frame.format_icell(str))
+        self.memory_buffer.setText(frame.format_mcell(chr))
+        self.io_buffer.setText(frame.format_icell(chr))
 
 
     def set_console_blocking(self, truth=True):
@@ -155,18 +159,48 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         QMetaObject.invokeMethod(self.modem_blocked.rootObject(), arg)
 
 
+    def append_console_output(self, isoutput, value):
+        prefix = "Out" if isoutput else "In "
+        self.console_output.append("{}[{}.{}]: {}".format(prefix,
+            self.tbas.run_counter, self.io_counter, value))
+
+    def cast_console_input(self):
+        input_ = self.console_input.text()
+        if len(input_):
+            return input_
+        return None
+
+    def preview_console_input(self):
+        self.console_input_value.setText(self.cast_console_input())
+
+    def process_console_input(self):
+        if self._future_console_input:
+            input_ = self.cast_console_input()
+            if type(input_) is str:
+                self.append_console_output(0, input_)
+                self._future_console_input.set_result(input_)
+                self.console_input.setText("")
+
+
+    # signal Handlers
+
     def frame_slider_valueChanged(self, index):
         self.view_stack_position(index)
 
     def frame_down_button_clicked(self, index):
-        print(index)
+        p = self.frame_slider.value() - 1
+        self.frame_slider.setValue(max(0, p))
 
     def frame_up_button_clicked(self, index):
-        print(index)
+        m = self.frame_slider.maximum()
+        p = self.frame_slider.value() + 1
+        self.frame_slider.setValue(min(m, p))
 
 
     def run_step_button_clicked(self, index):
         print(index)
+        print(self.outputs_widget.width())
+        print(self.width())
 
     def run_to_breakpoint_button_clicked(self, index):
         print(index)
@@ -200,22 +234,19 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
 
 
     def console_enable_stateChanged(self, value):
-        print(value)
+        pass
 
     def console_reset_button_clicked(self, index):
-        print(index)
+        self.console_input.setText("")
 
     def console_enter_button_clicked(self, index):
-        print(index)
+        self.process_console_input()
 
     def console_input_returnPressed(self):
-        print('return')
+        self.process_console_input()
 
     def console_input_textEdited(self, value):
-        print(value)
-
-    def console_select_currentIndexChanged(self, index):
-        print(index)
+        self.preview_console_input()
 
 
 
@@ -233,9 +264,6 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
 
     def modem_input_textEdited(self, value):
         print(value)
-
-    def modem_select_currentIndexChanged(self, index):
-        print(index)
 
 
 
