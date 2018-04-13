@@ -11,8 +11,6 @@ from quamash import QEventLoop, QThreadExecutor
 from tbas.tbas import Interpreter
 from tbas.mainwindow import Ui_MainWindow
 
-# logging.basicConfig(level=logging.DEBUG)
-
 
 def resource_path(filename):
     return os.path.join(
