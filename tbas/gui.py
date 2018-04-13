@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import sys
 
@@ -10,9 +11,7 @@ from quamash import QEventLoop, QThreadExecutor
 from tbas.tbas import Interpreter
 from tbas.mainwindow import Ui_MainWindow
 
-
-import logging
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 
 def resource_path(filename):
@@ -20,6 +19,17 @@ def resource_path(filename):
         os.path.dirname(os.path.abspath(__file__)),
         filename
         )
+
+
+class TBASLogHandler(logging.Handler):
+    def __init__(self, widget):
+        super().__init__()
+        self.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+        self.widget = widget
+
+    def emit(self, message):
+        self.widget.append(self.format(message))
+
 
 
 class TBASMainWindow(QMainWindow, Ui_MainWindow):
@@ -66,8 +76,34 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self.main_loop = QEventLoop(self)
         asyncio.set_event_loop(self.main_loop)
 
-        # finally setup TBAS
+        # Setup TBAS interpreter
         self.reset_tbas()
+        self.tbas.logger.addHandler(TBASLogHandler(self.log_buffer))
+        self.set_log_level()
+
+        # TODO: these buttons don't do anything
+        self.run_step_button.setEnabled(False)
+        self.run_to_breakpoint_button.setEnabled(False)
+        self.run_to_end_button.setEnabled(False)
+        self.reset_button.setEnabled(False)
+        self.reset_run_step_button.setEnabled(False)
+        self.reset_run_to_breakpoint_button.setEnabled(False)
+        self.remove_breakpoints_button.setEnabled(False)
+
+        self.buffer_address.setEnabled(False)
+        self.buffer_input.setEnabled(False)
+        self.buffer_equal_button.setEnabled(False)
+        self.buffer_zero_button.setEnabled(False)
+        self.buffer_zero_all_button.setEnabled(False)
+
+        self.memory_address.setEnabled(False)
+        self.memory_input.setEnabled(False)
+        self.memory_equal_button.setEnabled(False)
+        self.memory_zero_button.setEnabled(False)
+        self.memory_zero_all_button.setEnabled(False)
+
+        self.console_enable.setEnabled(False)
+        self.modem_enable.setEnabled(False)
 
 
     def exec_(self):
@@ -138,7 +174,8 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         self.frame_slider.setValue(0)
         self.frame_slider.setMaximum(stack_max)
         self._set_status_item(1, stack_max)
-        # will trigger a call to view_stack_position
+
+        # NOTE: will trigger a call to view_stack_position
         self.frame_slider.setValue(stack_max)
 
     def view_stack_position(self, stack_pointer):
@@ -160,8 +197,9 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
             i += 1
             self._set_status_item(i, getattr(frame, item))
 
-        self.memory_buffer.setText(frame.format_mcell(chr))
-        self.io_buffer.setText(frame.format_icell(chr))
+        # TODO: enable different formatting specifications
+        self.memory_buffer.setText(frame.format_mcell('03d'))
+        self.io_buffer.setText(frame.format_icell('03d'))
 
         # hilight the selected instruction
         cursor = self.program_input.textCursor()
@@ -169,15 +207,16 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
         cursor.setPosition(frame.eptr + 1, QtGui.QTextCursor.KeepAnchor)
         self.program_input.setTextCursor(cursor)
 
+        # TODO: hilight mptr and iptr
 
     def set_console_blocking(self, truth=True):
         arg = "start" if truth else "stop"
-        self.input_tabs.setCurrentIndex(0)
+        self.inputs_tabs.setCurrentIndex(0)
         QMetaObject.invokeMethod(self.console_blocked.rootObject(), arg)
 
     def set_modem_blocking(self, truth=True):
         arg = "start" if truth else "stop"
-        self.input_tabs.setCurrentIndex(1)
+        self.inputs_tabs.setCurrentIndex(1)
         QMetaObject.invokeMethod(self.modem_blocked.rootObject(), arg)
 
 
@@ -204,6 +243,7 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
                 self.console_input.setText("")
 
 
+    # TOOD: such wet copypasta!
     def append_modem_output(self, isoutput, value):
         prefix = "Out" if isoutput else "In "
         self.modem_output.append("{}[{}.{}]: {}".format(prefix,
@@ -226,6 +266,11 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
                 self._future_modem_input.set_result(input_)
                 self.modem_input.setText("")
 
+    def set_log_level(self):
+        index = self.log_level.currentIndex()
+        # TODO: hack!
+        level = (index + 1) * 10
+        self.tbas.logger.setLevel(level)
 
     # signal Handlers
 
@@ -243,39 +288,37 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
 
 
     def run_step_button_clicked(self, index):
-        print(index)
-        print(self.outputs_widget.width())
-        print(self.width())
+        pass
 
     def run_to_breakpoint_button_clicked(self, index):
-        print(index)
+        pass
 
     def run_to_end_button_clicked(self, index):
-        print(index)
+        pass
 
 
     def reset_button_clicked(self, index):
-        print(index)
+        pass
 
     def reset_run_step_button_clicked(self, index):
-        print(index)
+        pass
 
     def reset_run_to_breakpoint_button_clicked(self, index):
-        print(index)
+        pass
 
     def reset_run_to_end_button_clicked(self, index):
         self.program_input_set_clean()
         self.tbas_evaluate_program()
 
-    def log_reset_button_clicked(self, index):
-        print(index)
+    def remove_breakpoints_button_clicked(self, index):
+        pass
+
 
     def memory_select_currentIndexChanged(self, index):
-        print(index)
+        pass
 
     def buffer_select_currentIndexChanged(self, index):
-        print(index)
-
+        pass
 
 
     def console_enable_stateChanged(self, value):
@@ -296,24 +339,23 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
 
 
     def modem_enable_stateChanged(self, value):
-        print(value)
+        pass
 
     def modem_reset_button_clicked(self, index):
-        print(index)
+        self.modem_input.setText("")
 
     def modem_enter_button_clicked(self, index):
-        print(index)
-
-    def modem_input_returnPressed(self):
-        print('return')
+        self.process_modem_input()
 
     def modem_input_textEdited(self, value):
-        print(value)
+        self.preview_modem_input()
 
 
+    def log_level_currentIndexChanged(self, index):
+        self.set_log_level()
 
-    def remove_breakpoints_button_clicked(self, index):
-        print(index)
+    def log_reset_button_clicked(self, index):
+        self.log_buffer.setText("")
 
 
     def program_input_set_clean(self):
@@ -323,10 +365,6 @@ class TBASMainWindow(QMainWindow, Ui_MainWindow):
     def program_input_set_dirty(self):
         self.program_input_is_dirty = True
         self.program_input.setStyleSheet('border: 1px solid red')
-
-    # def program_input_cursorPositionChanged(self):
-    #     cursor = self.program_input.textCursor()
-    #     print("c@{}".format(cursor.position()))
 
     def program_input_textChanged(self):
         self.program_input_set_dirty()

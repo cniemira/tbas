@@ -8,6 +8,7 @@ from itertools import zip_longest
 
 _log = logging.getLogger(__name__)
 
+BYTE_MAX = 255
 WORKING_MEMORY_BYTES = 256
 
 
@@ -57,15 +58,16 @@ class Context(object):
 
     tasks = {
         0: '_exec_tbas',
-        1: '_exec_dialer',
-        2: '_exec_speaker',
+        1: '_exec_config',
+        2: '_exec_tonegn',
         3: '_exec_blinken',
         4: '_exec_scroller',
-        5: '_exec_war_dialer',
-        6: '_exec_box',
-        7: '_exec_tbascl',
-        8: '_exec_tbased'
+        5: '_exec_tbased',
+        6: '_exec_tbascl',
+        8: '_exec_autodt',
+        9: '_exec_dialer',
         }
+
 
     @property
     def n_instructions(self):
@@ -85,6 +87,7 @@ class Context(object):
             raise StopIteration
 
         self.operator = self.source[self.eptr]
+        _log.debug('EVAL: {}'.format(self.operator))
         await self._eval_op(self.operator)
         if self.goto:
             self.eptr = self.goto
@@ -100,7 +103,6 @@ class Context(object):
 
         self.icell = bytearray()
         self.imode = 0
-        self.iptr = 0
 
         self.in_dead_loop = 0
         self.loop_ref = []
@@ -147,7 +149,7 @@ class Context(object):
     async def _increment_mcell(self):
         if self.in_dead_loop:
             return Frame(self, noop=True, msg="in dead loop")
-        if self.mcell[self.mptr] == 255:
+        if self.mcell[self.mptr] == BYTE_MAX:
             return Frame(self, noop=True, msg="mcell[] is max")
         self.mcell[self.mptr] += 1
         return Frame(self)
@@ -170,7 +172,9 @@ class Context(object):
 
     async def _end_loop(self):
         if len(self.loop_ref) == 0:
-            raise UserWarning('] without matching [')
+            msg = '] without matching [ @{}'.format(self.eptr)
+            _log.warn(msg)
+            raise UserWarning(msg)
 
         goto_instruction = self.loop_ref.pop()
         if self.in_dead_loop:
@@ -187,10 +191,12 @@ class Context(object):
         return Frame(self)
 
     async def _run_operation(self):
-        if self.imode not in self.imodes:
-            raise UserWarning('Unknown IO mode')
         if self.in_dead_loop:
             return Frame(self, noop=True, msg="in dead loop")
+        if self.imode not in self.imodes:
+            msg = 'Unknown io mode {} @{}'.format(self.imode, self.eptr)
+            _log.warn(msg)
+            raise UserWarning(msg)
         command = self.imodes[self.imode]
         _log.debug('Context._run_operation "{}"'.format(command))
         future = asyncio.ensure_future(getattr(self, command)())
@@ -212,7 +218,7 @@ class Context(object):
             _log.debug('READ "{}"'.format(ivalue))
             if not ivalue.isdigit():
                 ivalue = ord(ivalue)
-            self.mcell[self.mptr] = int(ivalue) % 256
+            self.mcell[self.mptr] = int(ivalue) % (BYTE_MAX + 1)
 
     async def _console_ascii_write(self):
         mvalue = self.mcell[self.mptr]
@@ -227,7 +233,7 @@ class Context(object):
             task = await future
             ivalue = task.result()
             _log.debug('READ "{}"'.format(ivalue))
-            self.mcell[self.mptr] = ord(ivalue) % 256
+            self.mcell[self.mptr] = ord(ivalue) % (BYTE_MAX + 1)
 
     async def _modem_ascii_write(self):
         mvalue = self.mcell[self.mptr]
@@ -244,7 +250,7 @@ class Context(object):
             _log.debug('READ "{}"'.format(ivalue))
             if not ivalue.isdigit():
                 ivalue = ord(ivalue)
-            self.mcell[self.mptr] = ord(ivalue) % 256
+            self.mcell[self.mptr] = ord(ivalue) % (BYTE_MAX + 1)
 
     async def _buffer_program(self):
         self.icell = bytearray(self.source.encode())
@@ -253,19 +259,20 @@ class Context(object):
     async def _execute_task(self):
         mvalue = self.mcell[self.mptr]
         if mvalue not in self.tasks:
-            raise UserWarning('Unknown task')
+            msg = 'Unknown task {} @{}'.format(mvalue, self.eptr)
+            _log.warn(msg)
+            raise UserWarning(msg)
         command = self.tasks[mvalue]
         _log.debug('Context._execute_task "{}"'.format(command))
         getattr(self, command)()
         return Frame(self)
 
-    def _buffer_enqueue(self):
+    async def _buffer_enqueue(self):
         mvalue = self.mcell[self.mptr]
-        bvalue = mvalue.to_bytes(1, 'little')
-        _log.debug('STORE "{}"'.format(bvalue))
-        self.icell.append(bvalue)
+        _log.debug('STORE "{}"'.format(mvalue))
+        self.icell.append(mvalue)
 
-    def _buffer_dequeue_filo(self):
+    async def _buffer_dequeue_filo(self):
         if len(self.icell):
             bvalue = self.icell.pop()
             self.mcell[self.mptr] = bvalue
@@ -282,82 +289,82 @@ class Context(object):
         _log.debug('NO DEQUEUE')
         return 0
 
-    def _buffer_dequeue_fifo(self):
+    async def _buffer_dequeue_fifo(self):
         self.mcell[self.mptr] = self._deque_fifo()
 
-    def _buffer_clear(self):
+    async def _buffer_clear(self):
         self.icell = bytearray()
 
-    def _convert_lower_case(self):
+    async def _convert_lower_case(self):
         mvalue = self.mcell[self.mptr]
         if mvalue < 26:
             self.mcell[self.mptr] = mvalue + 97
 
-    def _convert_upper_case(self):
+    async def _convert_upper_case(self):
         mvalue = self.mcell[self.mptr]
         if mvalue < 26:
             self.mcell[self.mptr] = mvalue + 65
 
-    def _convert_decimal(self):
+    async def _convert_decimal(self):
         mvalue = self.mcell[self.mptr]
         if mvalue < 10:
             self.mcell[self.mptr] = mvalue + 48
 
-    def _convert_tbas(self):
+    async def _convert_tbas(self):
         mvalue = self.mcell[self.mptr]
         mapping = [43, 45, 60, 62, 91, 93, 61, 63]
         if mvalue < 8:
             self.mcell[self.mptr] = mapping[mvalue]
 
-    def _alu_add(self):
+    async def _alu_add(self):
         r = self.mcell[self.mptr] + self._deque_fifo()
-        self.mcell[self.mptr] = max(r, 255)
+        self.mcell[self.mptr] = max(r, BYTE_MAX)
 
-    def _alu_sub(self):
+    async def _alu_sub(self):
         r = self.mcell[self.mptr] + self._deque_fifo()
         self.mcell[self.mptr] = min(r, 0)
 
-    def _alu_mul(self):
+    async def _alu_mul(self):
         r = self.mcell[self.mptr] * self._deque_fifo()
-        self.mcell[self.mptr] = max(r, 255)
+        self.mcell[self.mptr] = min(r, BYTE_MAX)
 
-    def _alu_div(self):
+    async def _alu_div(self):
         q = self._deque_fifo()
         if q:
             r = int(self.mcell[self.mptr] / q)
             self.mcell[self.mptr] = min(r, 1)
 
-    def _alu_and(self):
+    async def _alu_and(self):
         mvalue = self.mcell[self.mptr]
         q = int(self._deque_fifo())
         self.mcell[self.mptr] = bytes(mvalue & q)
 
-    def _alu_or(self):
+    async def _alu_or(self):
         mvalue = self.mcell[self.mptr]
         q = int(self._deque_fifo())
         self.mcell[self.mptr] = bytes(mvalue | q)
 
-    def _alu_not(self):
+    async def _alu_not(self):
         mvalue = self.mcell[self.mptr]
         self.mcell[self.mptr] = 0 if mvalue else 1
 
-    def _alu_xor(self):
+    async def _alu_xor(self):
         mvalue = self.mcell[self.mptr]
         q = int(self._deque_fifo())
         self.mcell[self.mptr] = bytes(mvalue ^ q)
 
-    def _get_mptr(self):
+    async def _get_mptr(self):
         self.mcell[self.mptr] = self.mptr
 
-    def _get_eptr(self):
+    async def _get_eptr(self):
         self.mcell[self.mptr] = self.eptr + 1
 
-    def _jump_left(self):
+    async def _jump_left(self):
         mvalue = self.mcell[self.mptr]
         jump = max(self.n_instructions, mvalue)
         self.goto = self.eptr - jump
 
-    def _jump_right(self):
+    async def _jump_right(self):
         mvalue = self.mcell[self.mptr]
         jump = max(self.n_instructions, mvalue)
         self.goto = self.eptr + jump
@@ -365,17 +372,12 @@ class Context(object):
     def _exec_tbas(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
-        print('tbas {}'.format(buf))
+        _log.info('tbas {}'.format(buf))
 
     def _exec_dialer(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
-        print('DIALER {}'.format(buf))
-
-    def _exec_speaker(self):
-        buf = self.icell.decode('ascii')
-        self.icell = bytearray()
-        print('SPEAKER {}'.format(buf))
+        _log.info('dialer {}'.format(buf))
 
     def _exec_blinken(self):
         buf = self.icell.decode('ascii')
@@ -387,42 +389,41 @@ class Context(object):
         vel_delay = buf.pop(0)
         lfo = buf.pop(0)
         lfo_delay = buf.pop(0)
-        print('BLINKEN {} {} {} {} {} {} {}'.format(
+        _log.info('blinken {} {} {} {} {} {} {}'.format(
             part, pos, mask, vel, vel_delay, lfo, lfo_delay
             ))
 
     def _exec_scroller(self):
-        buf = self.icell.decode('ascii')
-        self.icell = bytearray()
-        ppong = buf.pop(0)
-        steps = buf.pop(0)
-        blanks = buf.pop(0)
-        msg = ''.join(buf)
-        print('SCROLLER {} {} {} {}'.format(
-            ppong, steps, blanks, msg
+        ppong = self.icell.pop(0)
+        steps = self.icell.pop(0)
+        blanks = self.icell.pop(0)
+        _log.info('scroller {} {} {} {}'.format(
+            ppong, steps, blanks, self.icell.decode('ascii')
             ))
+        self.icell = bytearray()
 
-    def _exec_war_dialer(self):
+    def _exec_autodt(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
         num = buf[0]
         tts = buf[1:]
-        print('WARDIALER {} {}'.format(num, buf))
+        _log.info('autodt {} {}'.format(num, buf))
 
-    def _exec_box(self):
+    def _exec_tonegn(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
-        print('BOX {}'.format(buf))
+        _log.info('tonegn {}'.format(buf))
 
     def _exec_tbascl(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
-        print('TBASCL {}'.format(buf))
+        _log.info('tbasctl {}'.format(buf))
 
     def _exec_tbased(self):
         buf = self.icell.decode('ascii')
         self.icell = bytearray()
-        print('TBASED {}'.format(buf))
+        _log.info('tbased {}'.format(buf))
+
 
 
 def chunk(n, i, v=None):
@@ -431,7 +432,7 @@ def chunk(n, i, v=None):
 
 
 class Frame(object):
-    _context_keys = ['mcell', 'mptr', 'icell', 'imode', 'iptr', 'in_dead_loop',
+    _context_keys = ['mcell', 'mptr', 'icell', 'imode', 'in_dead_loop',
                      'loop_ref', 'eptr', 'operator', 'goto']
 
     def __init__(self, context, noop=False, msg=None):
@@ -455,18 +456,20 @@ class Frame(object):
             return self.loop_ref[-1]
         return None
 
-    def _format_byte(self, byte, type_=chr):
+    def _format_byte(self, byte, format):
+        format_string = "{:" + format + "}"
         if byte is None:
-            return "   "
-        return "{:03d}".format(byte)
+            zeros = format_string.format(0)
+            return " " * len(zeros)
+        return format_string.format(byte)
 
-    def _format_memory(self, memory, type_=chr):
+    def _format_memory(self, memory, format='03d'):
         b = io.StringIO()
         row_n = 0
         for row in chunk(16, memory):
             l, r = chunk(8, row)
-            l_bytes = " ".join([self._format_byte(x, type_) for x in iter(l)])
-            r_bytes = " ".join([self._format_byte(x, type_) for x in iter(r)])
+            l_bytes = " ".join([self._format_byte(x, format) for x in iter(l)])
+            r_bytes = " ".join([self._format_byte(x, format) for x in iter(r)])
             b.write("0x{:03d}: ".format(row_n*16))
             b.write("   ".join([l_bytes, r_bytes]) + "\n")
             row_n += 1
@@ -479,6 +482,7 @@ class Frame(object):
         return self._format_memory(self.mcell, type_)
 
 
+#TODO: this could be more useful
 class Stack(list):
     pass
 
@@ -492,6 +496,7 @@ class Interpreter(object):
         self.modem_read = modem_read
         self.modem_write = modem_write
         self.run_counter = 0
+        self.logger = _log
 
     async def _console_read(self, *args, **kwargs):
         if self.console_read:
@@ -524,8 +529,12 @@ class Interpreter(object):
     async def run(self, program):
         #TODO: ensure this looks like valid TBAS code
         ctx = Context(program, self)
-        await ctx.run()
-        self.run_counter += 1
+        try:
+            await ctx.run()
+            self.run_counter += 1
+            return ctx
+        except Exception as e:
+            _log.error(e)
         return ctx
 
 
@@ -533,10 +542,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     c_abc = '++=++++++[->++++++++<]>+?+?+?'
-    c_123 = '+++[?-]'
 
     tbas = Interpreter(console=io.StringIO())
-    ctx = tbas.run(c_123)
+    ctx = tbas.run(c_abc)
     print(tbas.console.getvalue())
-
-    

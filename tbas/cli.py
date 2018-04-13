@@ -23,13 +23,14 @@ async def run_tbas(program, **kwargs):
 
 
 def main():
-    p = argparse.ArgumentParser(description='Tis But A Scratch')
+    p = argparse.ArgumentParser(description='tbas')
  
     m = p.add_mutually_exclusive_group()
-    m.add_argument('-c', action='store_true')
-    m.add_argument('-m', action='store_true')
- 
+    m.add_argument('-c', action='store_true', help='attach console to STD*')
+    m.add_argument('-m', action='store_true', help='attach modem to STD*')
     p.add_argument('-d', '--debug', action='store_true')
+    p.add_argument('-f', type=int, help='print contents of frame')
+
     p.add_argument('program')
     args = p.parse_args()
 
@@ -53,8 +54,9 @@ def main():
     loop = asyncio.get_event_loop()
     context = loop.run_until_complete(run_tbas(args.program, **kwargs))
     print("\n")
-    print(context.stack)
-    print(context.stack[0].format_mcell(chr))
+
+    if args.f:
+        print(context.stack[args.f].format_mcell('03d'))
 
 
 if __name__ == '__main__':

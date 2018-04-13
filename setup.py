@@ -19,7 +19,11 @@ setup(name='tbas',
       description='Tis But A Scratch',
       long_description=README,
       classifiers=[
+          "Development Status :: 3 - Alpha",
+          "License :: Public Domain",
+          "Programming Language :: Other",
           "Programming Language :: Python",
+          "Topic :: Text Editors :: Integrated Development Environments (IDE)"
       ],
       url='https://github.com/cniemira/tbas',
       keywords='games',
