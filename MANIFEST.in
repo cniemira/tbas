@@ -1,0 +1,3 @@
+include tbas/*.png
+include tbas/*.qml
+include tbas/*.ui
