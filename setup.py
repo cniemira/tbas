@@ -8,7 +8,7 @@ README = """Tis But A Scratch
 """
 
 requires = [
-    'pyqt=5',
+    'PyQt5',
     'quamash'
     ]
 
@@ -26,7 +26,7 @@ setup(name='tbas',
           "Topic :: Text Editors :: Integrated Development Environments (IDE)"
       ],
       url='https://github.com/cniemira/tbas',
-      keywords='games',
+      keywords='tbas',
       packages=find_packages(),
       include_package_data=True,
       zip_safe=False,
